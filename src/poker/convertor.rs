@@ -1,13 +1,11 @@
 use std::{fmt::{self, Write}};
+use std::slice::{Iter, IterMut};
 
 use itertools::Itertools;
 
+// Card
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Card(pub u8);
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CardSet(pub Vec<Card>);
-
 
 impl fmt::Display for Card {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
@@ -21,11 +19,24 @@ impl fmt::Display for Card {
     }
 }
 
+impl From<u8> for Card {
+    fn from(c: u8) -> Self {
+        Card(c)
+    }
+}
+
+// CardSet
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CardSet {
+    cards: [Card; 7],
+    size: u8
+}
+
 impl fmt::Display for CardSet {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        for (i, card) in self.0.iter().enumerate() {
+        for (i, card) in self.iter().enumerate() {
             fmt.write_fmt(format_args!("{}", card))?;
-            if i != self.0.len()-1 {
+            if i != self.len()-1 {
                 fmt.write_char(' ')?;
             }
         }
@@ -33,15 +44,11 @@ impl fmt::Display for CardSet {
     }
 }
 
-impl From<u8> for Card {
-    fn from(c: u8) -> Self {
-        Card(c)
-    }
-}
-
 impl From<Vec<u8>> for CardSet {
     fn from(c: Vec<u8>) -> Self {
-        CardSet(c.iter().map(|&x| x.into()).collect())
+        let vec = c.iter().map(|&x| x.into()).collect::<Vec<Card>>();
+        
+        CardSet::from_vec(vec)
     }
 }
 
@@ -54,34 +61,71 @@ impl Into<CardSet> for &str {
 
 		let mut cards = Vec::new();
 
-		for i in 0..self.chars().count()/3 {
-            let nr_char = NRS.chars().nth(3*i).unwrap();
-            let suit_char = SUITS.chars().nth(3*i+1).unwrap();
-            let suit = self.chars().position(|c| c == nr_char).unwrap();
-            let nr = self.chars().position(|c| c == suit_char).unwrap();
-			cards.push(Card((nr * 13 + suit) as u8));
+		for i in 0..(self.chars().count()+1)/3 {
+            let suit_char = self.chars().nth(3*i+1).unwrap();
+            let nr_char = self.chars().nth(3*i).unwrap();
+            let suit = SUITS.chars().position(|c| c == suit_char).unwrap();
+            let nr = NRS.chars().position(|c| c == nr_char).unwrap();
+			cards.push(Card((suit * 13 + nr) as u8));
 		}
 
-		CardSet(cards)
+		CardSet::from_vec(cards)
 	}
 }
 
+impl FromIterator<Card> for CardSet {
+    fn from_iter<I: IntoIterator<Item = Card>>(iter: I) -> Self {
+        let vec = iter.into_iter().collect::<Vec<Card>>();
+        Self::from_vec(vec)
+    }
+}
+
 impl CardSet {
+    pub fn from_vec(cards: Vec<Card>) -> Self {
+        Self::new(cards.as_slice())
+    }
+
+    pub fn new(cards: &[Card]) -> Self {
+        let mut cs = CardSet {
+            cards: [255.into(); 7],
+            size: std::cmp::min(cards.len() as u8, 7)
+        };
+        cs.update(cards);
+        cs
+    }
+
+    fn update(&mut self, cards: &[Card]) {
+        let length = std::cmp::min(cards.len(), self.cards.len());
+        self.cards[0..length].copy_from_slice(cards[0..length].as_ref());
+    }
+
+    pub fn len(&self) -> usize {
+        self.size as usize
+    }
+
+    pub fn iter(&self) -> Iter<'_, Card> {
+        self.cards[..self.size as usize].iter()
+    }
+
+    pub fn iter_mut(&mut self) -> IterMut<'_, Card> {
+        self.cards[..self.size as usize].iter_mut()
+    }
+
     pub fn increment(&mut self) -> bool {
-        let card_count = self.0.len();
-        self.0[card_count-1].0 += 1;
+        let card_count = self.len();
+        self.cards[card_count-1].0 += 1;
         for i in (0..card_count).rev() {
-            if self.0[i].0 as usize >= 52-(card_count-1-i) {
+            if self.cards[i].0 as usize >= 52-(card_count-1-i) {
                 if i == 0 {
                     // Max value was exceeded, failed to increment
                     return false;
                 }
-                self.0[i-1].0 += 1;
+                self.cards[i-1].0 += 1;
                 continue;
             }
-            // Found a value who's max is was not exceeded
+            // Found a value who's max is not exceeded
             for j in i+1..card_count {
-                self.0[j].0 = self.0[i].0 + (j - i) as u8;
+                self.cards[j].0 = self.cards[i].0 + (j - i) as u8;
             }
             break;            
         }
@@ -90,9 +134,11 @@ impl CardSet {
 
     pub fn identifier(&self) -> u64 {
         let mut id = 0u64;
-        for c in self.0.iter() {
+        for (i, c) in self.iter().enumerate() {
             id |= c.0 as u64;
-            id <<= 8;
+            if i != self.len()-1 {
+                id <<= 8;
+            }
         }
         id
     }
@@ -103,227 +149,291 @@ impl CardSet {
     }
 
     pub fn canonicalize(&mut self) {
-        const PRIMES: [usize; 13] = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41];
+        const PRIMES: [u64; 13] = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41];
+        let nrs = {
+            let mut cs = self.clone();
+            for c in cs.iter_mut() {
+                c.0 %= 13;
+            }
+            cs
+        };
+        
+        let suits = {
+            let mut cs = self.clone();
+            for c in cs.iter_mut() {
+                c.0 /= 13;
+            }
+            cs
+        };
 
-        let nrs = self.0.iter().map(|card| (card.0 % 13) as usize).collect::<Vec<usize>>();
-        let suits = self.0.iter().map(|card| (card.0 / 13) as usize).collect::<Vec<usize>>();
         let mut suit_count: [usize; 4] = [0, 0, 0, 0];
-        for &s in &suits {
-            suit_count[s] += 1;
+        for &s in suits.iter() {
+            suit_count[s.0 as usize] += 1;
         }
-
-        // Determine suit mapping
-        let mut suit_second_ranking: [usize; 4] = [1, 1, 1, 1];
-        for (&nr, &suit) in itertools::izip!(&nrs, &suits) {
-            suit_second_ranking[suit] *= PRIMES[nr];
+        
+        let mut suit_second_ranking: [u64; 4] = [1, 1, 1, 1];
+        for (&nr, &suit) in itertools::izip!(nrs.iter(), suits.iter()) {
+            suit_second_ranking[suit.0 as usize] *= PRIMES[nr.0 as usize];
         }
+        
 
         let inv_suit_mapping: Vec<usize> = (0..4).into_iter().enumerate()
             .sorted_by_key(|&(i, _)| suit_second_ranking[i])
             .sorted_by_key(|&(i, _)| suit_count[i])
             .map(|(_, i)| i).collect::<Vec<usize>>();
 
-        let mut suit_mapping: [usize; 4] = [0, 0, 0, 0];
+        // println!("{:?} -> {:?}", suit_count, inv_suit_mapping);
+
+        // Determine suit mapping
+        let mut suit_mapping: [u8; 4] = [0, 0, 0, 0];
         for i in 0..4 {
-            suit_mapping[inv_suit_mapping[i]] = (3 - i) as usize;
+            suit_mapping[inv_suit_mapping[i]] = i as u8;
         }
 
-        let out = itertools::izip!(&nrs, &suits)
-            .map(|(&nr, &suit)| suit_mapping[suit]*13 + nr)
-            .sorted()
-            .map(|c| Card(c as u8))
+        let out = itertools::izip!(nrs.iter(), suits.iter())
+            .map(|(&nr, &suit)| suit_mapping[suit.0 as usize]*13 + nr.0)
+            .sorted_by_key(|&x| 255u8-x)
+            .map(|c| c.into())
             .collect::<Vec<Card>>();
 
-        self.0 = out;
+        self.update(out.as_slice());
     }
 
+    /*
     pub fn evaluate(&self) -> u32 {
-        unimplemented!()
+        0u32
     }
-}
-/*
-impl CanonicalCardSet {
-    pub fn canonical_cards_to_eval(&self) -> u32 {
-        let HIGH_CARD_START : u32 = 0 * (1 << 20) + 1; // 0;
-        let PAIR_START : u32 = 1 * (1 << 20); // HIGH_CARD_START + 154440;
-        let TWO_PAIR_START : u32 = 2 * (1 << 20); // PAIR_START + 22308;
-        let THREE_OF_KIND_START : u32 = 3 * (1 << 20); // TWO_PAIR_START + 1870;
-        let STRAIGHT_START : u32 = 4 * (1 << 20); // THREE_OF_KIND_START + 2028;
-        let FLUSH_START : u32 = 5 * (1 << 20); // STRAIGHT_START + 10;
-        let FULL_HOUSE_START : u32 = 6 * (1 << 20); // FLUSH_START + 154440;
-        let FOUR_OF_KIND_START : u32 = 7 * (1 << 20); // FULL_HOUSE_START + 181;
-        let STRAIGHT_FLUSH_START : u32 = 8 * (1 << 20); // FOUR_OF_KIND_START + 181;
+    */
+    
+    pub fn evaluate(&self) -> i32 {
+        // Expects the card vector to be canonicalized
+        // Expects the card vector to be of length 7
 
 
-        let nrs = canonical_cards.into_iter().map(|&card| card % 13).collect::<Vec<Card>>();
-        let is_flush = canonical_cards[4] / 13 == 3;
+        // -----------ALG------------
+        // <Calculate 'Flush'>
+        // if Flush:
+        //   <Calculate 'Straight'>
+        //   if Straight:
+        //     return STRAIGHT_FLUSH_START (includes ROYAL_FLUSH)
+        //   else:
+        //     return FLUSH
+        //
+        // <Calculate all 'n-of-a-kinds'>
+        // if 4-of-kind:
+        //   return FOUR_OF_KIND (aka QUADS)
+        // if 3-of-kind && 2-of-kind:
+        //   return FULL_HOUSE
+        // 
+        // <Calculate 'Straight'>
+        // if Straight:
+        //   return STRAIGHT
+        // 
+        // if 3-of-kind:
+        //   return THREE_OF_KIND
+        // if 2-of-kind x2:
+        //   return TWO_PAIR
+        // if 2-of-kind:
+        //   return PAIR
+        // else:
+        //   return HIGH_CARD
+        // --------------------------
+
+        const HIGH_CARD_START : i32      = 0 * (1 << 20) + 1; // 0;
+        const PAIR_START : i32           = 1 * (1 << 20); // HIGH_CARD_START + 154440;
+        const TWO_PAIR_START : i32       = 2 * (1 << 20); // PAIR_START + 22308;
+        const THREE_OF_KIND_START : i32  = 3 * (1 << 20); // TWO_PAIR_START + 1870;
+        const STRAIGHT_START : i32       = 4 * (1 << 20); // THREE_OF_KIND_START + 2028;
+        const FLUSH_START : i32          = 5 * (1 << 20); // STRAIGHT_START + 10;
+        const FULL_HOUSE_START : i32     = 6 * (1 << 20); // FLUSH_START + 154440;
+        const FOUR_OF_KIND_START : i32   = 7 * (1 << 20); // FULL_HOUSE_START + 181;
+        const STRAIGHT_FLUSH_START : i32 = 8 * (1 << 20); // FOUR_OF_KIND_START + 181;
+
+        let mut nrs = {
+            let mut cs = self.clone();
+            for c in cs.iter_mut() {
+                c.0 %= 13;
+            }
+            cs
+        };
+
+        println!("self={:?}, nrs={:?}", self, nrs);
+
+        let is_flush = self.cards[4].0 / 13 == 3;
         if is_flush {
-            let straight = -1;
-            let current_straight_count = 1;
+            let mut straight = -1i32;
+            let mut current_straight_count = 1;
             for i in 1..nrs.len() {
-                if (canonical_cards[i] / 13 != 3) break;
-                if (nrs[i - 1] != nrs[i] + 1)
-                {
+                if self.cards[i].0 / 13 != 0 {
+                    break;
+                }
+                if nrs.cards[i-1].0 != nrs.cards[i].0 + 1 {
                     current_straight_count = 1;
                     continue;
                 }
-                current_straight_count++;
-                if (nrs[i] == 0 && nrs[0] == 12) {
-                    current_straight_count++;
+                current_straight_count += 1;
+                if nrs.cards[i].0 == 0 && nrs.cards[0].0 == 12 {
+                    // Ace can cause a low straight
+                    current_straight_count += 1;
                 }
-                if (current_straight_count >= 5) {
+                if current_straight_count >= 5 {
                     // (Highest) Straight found
-                    straight = nrs[i];
+                    straight = nrs.cards[i].0 as i32;
                     break;
                 }
             }
-
-            // Full House and 4 of a kind are not possible because there is a flush
-            if (straight != -1) {
+            // Only 'Flush' or 'Straight Flush' or 'Royal Flush' are possible
+            if straight != -1 {
                 // Royal/Straight flush
-                return STRAIGHT_FLUSH_START + straight;
+                return STRAIGHT_FLUSH_START + (straight as i32);
             } else {
                 // Flush
-                return FLUSH_START + 11880 * nrs[0] + 990 * nrs[1] + 90 * nrs[2] + 9 * nrs[3] + nrs[4];
+                return FLUSH_START + 
+                    (nrs.cards[0].0 as i32) * 11880 + 
+                    (nrs.cards[1].0 as i32) * 990 + 
+                    (nrs.cards[2].0 as i32) * 90 + 
+                    (nrs.cards[3].0 as i32) * 9 + 
+                    (nrs.cards[4].0 as i32);
             }
         }
-        else
-        {
-            nrs.sort();
-            // std::sort(nrs.begin(), nrs.end(), std::greater<>());
+        // Not a flush => Not 'Flush' or 'Straight Flush' or 'Royal Flush'
+        
+        nrs.cards.sort_by(|a, b| b.0.cmp(&a.0));
 
-            // Straight
-            let straight = -1;
-            unsigned char current_straight_count = 1;
-            for (size_t i = 1; i < nrs.size(); i++)
-            {
-                if (nrs[i - 1] != nrs[i] + 1)
-                {
-                    if (nrs[i - 1] != nrs[i])
-                    {
-                        current_straight_count = 1;
-                    }
+        // n-of-a-kind
+        let mut four_kind = -1;
+        let mut three_kind = -1;
+        let mut two_kind_h = -1;
+        let mut two_kind_l = -1;
+
+        let mut kind_count: u8 = 1;
+        for i in 1..nrs.len() {
+            if nrs.cards[i-1] == nrs.cards[i] {
+                kind_count += 1;
+                if i != nrs.len()-1 {
+                    // We are not at the end of card_set && we didn't broke repeating pattern
+                    // Wait until we are at the end or we break repeating pattern to take conclusions
                     continue;
                 }
-                current_straight_count++;
-                if (nrs[i] == 0 && nrs[0] == 12)
-                {
-                    current_straight_count++;
+            }
+            if four_kind == -1 && kind_count == 4 {
+                four_kind = nrs.cards[i-1].0 as i32;
+                break;
+            } else if three_kind == -1 && kind_count == 3 {
+                three_kind = nrs.cards[i-1].0 as i32;
+            } else if two_kind_h == -1 && kind_count >= 2 {
+                two_kind_h = nrs.cards[i-1].0 as i32;
+            } else if two_kind_l == -1 && kind_count == 2 {
+                two_kind_l = nrs.cards[i-1].0 as i32;
+            }
+            // We broke pattern
+            kind_count = 1;
+        }
+
+        if four_kind != -1 {
+            // Four of a kind
+            let kicker_value: i32;
+            if nrs.cards[0].0 as i32 == four_kind {
+                kicker_value = nrs.cards[4].0 as i32;
+            } else {
+                kicker_value = nrs.cards[0].0 as i32;
+            }
+            return FOUR_OF_KIND_START + 13 * four_kind + kicker_value;
+        } else if three_kind != -1 && two_kind_h != -1 {
+            // Full house
+            return FULL_HOUSE_START + 13 * three_kind + two_kind_h;
+        }
+
+        
+        // Straight
+        let mut straight: i32 = -1;
+        let mut current_straight_count = 1;
+        for i in 1..nrs.len() {
+            if nrs.cards[i-1].0 != nrs.cards[i].0 + 1 {
+                if nrs.cards[i-1].0 != nrs.cards[i].0 {
+                    current_straight_count = 1;
                 }
-                if (current_straight_count >= 5)
-                {
-                    // (Highest) Straight found
-                    straight = nrs[i];
+                continue;
+            }
+            current_straight_count += 1;
+            if nrs.cards[i].0 == 0 && nrs.cards[0].0 == 12 {
+                // Ace can cause a low straight
+                current_straight_count += 1;
+            }
+            if current_straight_count >= 5 {
+                // (Highest) Straight found
+                straight = nrs.cards[i].0 as i32;
+                break;
+            }
+        }
+        
+        if straight != -1 {
+            // Straight
+            return STRAIGHT_START + straight;
+        } else if three_kind != -1 && two_kind_h == -1 {
+            // Three of a kind
+            let mut kicker_0 = -1;
+            let mut kicker_1 = -1;
+            let mut i = 0;
+            while i < 5 {
+                if nrs.cards[i].0 as i32 == three_kind {
+                    i += 3; // Go faster
+                    continue;
+                }
+                if kicker_0 == -1 {
+                    kicker_0 = nrs.cards[i].0 as i32;
+                } else {
+                    kicker_1 = nrs.cards[i].0 as i32;
                     break;
                 }
+                i += 1;
             }
-
-
-            // Kinds
-            let four_kind = -1;
-            let three_kind = -1;
-            let two_kind_h = -1;
-            let two_kind_l = -1;
-
-            let kind_count: u8 = 1;
-            for (size_t i = 1; i < nrs.size(); i++)
-            {
-                if (nrs[i - 1] == nrs[i]) {
-                    kind_count++;
-                    if (i != nrs.size() - 1) continue;
-                }
-                if (four_kind == -1 && kind_count == 4) {
-                    four_kind = nrs[i-1];
-                    break;
-                }
-                else if (three_kind == -1 && kind_count == 3) {
-                    three_kind = nrs[i-1];
-                }
-                else if (two_kind_h == -1 && kind_count >= 2) {
-                    two_kind_h = nrs[i-1];
-                }
-                else if (two_kind_l == -1 && kind_count == 2) {
-                    two_kind_l = nrs[i-1];
-                }
-                kind_count = 1;
-            }
-
-            if (four_kind != -1)
-            {
-                // Four of a kind
-                return FOUR_OF_KIND_START + 13 * four_kind + (nrs[0] == four_kind ? nrs[4] : nrs[0]);
-            }
-            else if (three_kind != -1 && two_kind_h != -1)
-            {
-                // Full house
-                return FULL_HOUSE_START + 13 * three_kind + two_kind_h;
-            }
-            else if (straight != -1)
-            {
-                // Straight
-                return STRAIGHT_START + straight;
-            }
-            else if (three_kind != -1 && two_kind_h == -1)
-            {
-                // Three of a kind
-                uint32_t kicker_0 = 65535;
-                uint32_t kicker_1 = 65535;
-                for (int i = 0; i < 5; i++)
-                {
-                    if (nrs[i] == three_kind)
-                    {
-                        i+=2; // Go faster
+            return THREE_OF_KIND_START + 156 * three_kind + 12 * kicker_0 + kicker_1;
+        } else if two_kind_h != -1 {
+            if two_kind_l != -1 {
+                // Two pair
+                let mut kicker: i32 = -1;
+                let mut i = 0;
+                while i < 5 {
+                    if nrs.cards[i].0 == two_kind_h as u8 || nrs.cards[i].0 == two_kind_l as u8 {
+                        i += 2; // Go faster
                         continue;
                     }
-                    if (kicker_0 == 65535) {
-                        kicker_0 = nrs[i];
-                    }
-                    else {
-                        kicker_1 = nrs[i];
-                        break;
-                    }
+                    kicker = nrs.cards[i].0 as i32;
+                    break;
                 }
-                return THREE_OF_KIND_START + 156 * three_kind + 12 * kicker_0 + kicker_1;
-            } else if (two_kind_h != -1) {
-                if (two_kind_l != -1) {
-                    // Two pair
-                    uint32_t kicker = 65535;
-                    for (int i = 0; i < 5; i++) {
-                        if (nrs[i] == two_kind_h || nrs[i] == two_kind_l) {
-                            i++; // Go faster
-                            continue;
-                        }
-                        kicker = nrs[i];
-                        break;
-                    }
-                    return TWO_PAIR_START + 156 * (two_kind_h - 1) + 13 * two_kind_l + kicker;
-                } else {
-                    // Pair
-                    uint32_t kicker_0 = 65535;
-                    uint32_t kicker_1 = 65535;
-                    uint32_t kicker_2 = 65535;
-                    for (int i = 0; i < 5; i++)
-                    {
-                        if (nrs[i] == two_kind_h) {
-                            i++; // Go faster
-                            continue;
-                        }
-                        if (kicker_0 == 65535) {
-                            kicker_0 = nrs[i];
-                        } else if (kicker_1 == 65535) {
-                            kicker_1 = nrs[i];
-                        } else {
-                            kicker_2 = nrs[i];
-                            break;
-                        }
-                    }
-                    return PAIR_START + 1716 * two_kind_h + 132 * kicker_0 + 11 * kicker_1 + kicker_2;
-                }
+                return TWO_PAIR_START + (two_kind_h-1) * 156 + two_kind_l * 13 + kicker;
             } else {
-                // High card
-                return HIGH_CARD_START + 11880 * nrs[0] + 990 * nrs[1] + 90 * nrs[2] + 9 * nrs[3] + nrs[4];
+                // Pair
+                let mut kicker_0: i32 = -1;
+                let mut kicker_1: i32 = -1;
+                let mut kicker_2: i32 = -1;
+                let mut i = 0;
+                while i < 5 {
+                    if nrs.cards[i].0 == two_kind_h as u8 {
+                        i += 2; // Go faster
+                        continue;
+                    }
+                    if kicker_0 == -1 {
+                        kicker_0 = nrs.cards[i].0 as i32;
+                    } else if kicker_1 == -1 {
+                        kicker_1 = nrs.cards[i].0 as i32;
+                    } else {
+                        kicker_2 = nrs.cards[i].0 as i32;
+                        break;
+                    }
+                    i += 1;
+                }
+                return PAIR_START + 1716 * two_kind_h + 132 * kicker_0 + 11 * kicker_1 + kicker_2;
             }
+        } else {
+            // High card
+            return HIGH_CARD_START + 
+                (nrs.cards[0].0 as i32) * 11880 +
+                (nrs.cards[1].0 as i32) * 990 +
+                (nrs.cards[2].0 as i32) * 90 +
+                (nrs.cards[3].0 as i32) * 9 +
+                (nrs.cards[4].0 as i32);
         }
     }
 }
-    */

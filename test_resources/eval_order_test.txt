@@ -4,7 +4,7 @@ Ts Js Qs Ks As 8s 8d
 Th Jh Qh Kh Ah 6s 8d
 
 # Straight Flush
-7s 8s 9s Ts Js As As
+7s 8s 9s Ts Js As Ac
 7s 8s 9s Ts Js 6s 3h
 7s 8s 9s Ts Js 2c 2h
 

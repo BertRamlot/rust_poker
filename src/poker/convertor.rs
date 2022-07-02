@@ -209,7 +209,6 @@ impl CardSet {
         // Expects the card vector to be canonicalized
         // Expects the card vector to be of length 7
 
-
         // -----------ALG------------
         // <Calculate 'Flush'>
         // if Flush:
@@ -257,14 +256,13 @@ impl CardSet {
             cs
         };
 
-        println!("self={:?}, nrs={:?}", self, nrs);
 
         let is_flush = self.cards[4].0 / 13 == 3;
         if is_flush {
             let mut straight = -1i32;
             let mut current_straight_count = 1;
             for i in 1..nrs.len() {
-                if self.cards[i].0 / 13 != 0 {
+                if self.cards[i].0 / 13 != 3 {
                     break;
                 }
                 if nrs.cards[i-1].0 != nrs.cards[i].0 + 1 {
@@ -272,13 +270,14 @@ impl CardSet {
                     continue;
                 }
                 current_straight_count += 1;
-                if nrs.cards[i].0 == 0 && nrs.cards[0].0 == 12 {
-                    // Ace can cause a low straight
-                    current_straight_count += 1;
+                if current_straight_count == 4 && nrs.cards[i].0 == 0 && nrs.cards[0].0 == 12 {
+                    // Ace causes low straight
+                    straight = 0;
+                    break;
                 }
-                if current_straight_count >= 5 {
+                if current_straight_count == 5 {
                     // (Highest) Straight found
-                    straight = nrs.cards[i].0 as i32;
+                    straight = 1 + (nrs.cards[i].0 as i32);
                     break;
                 }
             }
@@ -344,7 +343,6 @@ impl CardSet {
             return FULL_HOUSE_START + 13 * three_kind + two_kind_h;
         }
 
-        
         // Straight
         let mut straight: i32 = -1;
         let mut current_straight_count = 1;
@@ -356,13 +354,14 @@ impl CardSet {
                 continue;
             }
             current_straight_count += 1;
-            if nrs.cards[i].0 == 0 && nrs.cards[0].0 == 12 {
-                // Ace can cause a low straight
-                current_straight_count += 1;
+            if current_straight_count == 4 && nrs.cards[i].0 == 0 && nrs.cards[0].0 == 12  {
+                // Ace causes low straight
+                straight = 0;
+                break;
             }
-            if current_straight_count >= 5 {
+            if current_straight_count == 5 {
                 // (Highest) Straight found
-                straight = nrs.cards[i].0 as i32;
+                straight = 1 + (nrs.cards[i].0 as i32);
                 break;
             }
         }

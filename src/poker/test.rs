@@ -14,7 +14,7 @@ mod tests {
 
         for card_count in 1..EXPECTED_COUNTS.len() {
 			let mut hand_count = 0u64;
-            println!("Starting card_count={}", card_count);
+            // println!("Starting card_count={}", card_count);
             let mut card_vec = Vec::new();
             for i in 0..card_count {
                 card_vec.push(i as u8);
@@ -39,15 +39,15 @@ mod tests {
 	#[test]
 	fn test_canonical_eval() {
 		const EXPECTED_COUNTS: [(&str, u32); 9] = [
-			("High card", 23294460),
-			("One pair", 58627800),
-			("Two pair", 31433400),
-			("Three of a kind", 6461620),
-			("Straight", 6180020),
-			("Flush", 4047644),
-			("Full house", 3473184),
-			("Four of a kind", 224848),
-			("St/Ro flush", 41584)
+			("St/Ro flush",        41584),
+			("Four of a kind",    224848),
+			("Full house",       3473184),
+			("Flush",            4047644),
+			("Straight",         6180020),
+			("Three of a kind",  6461620),
+			("Two pair",        31433400),
+			("One pair",        58627800),
+			("High card",       23294460)
 		];
 
 		let mut input: CardSet = vec![0, 1, 2, 3, 4, 5, 6].into();
@@ -56,7 +56,8 @@ mod tests {
 		loop {
             let output = input.clone().as_canonical();
             let eval = output.evaluate();
-			eval_type_count[(eval >> 20) as usize] += 1;
+			let eval_type_count_index = eval_type_count.len()-1 - ((eval >> 20) as usize);
+			eval_type_count[eval_type_count_index] += 1;
 			hand_count += 1;
 			if !input.increment() {
 				break;
@@ -66,10 +67,26 @@ mod tests {
 		assert_eq!(EXPECTED_HAND_COUNT[7], hand_count,
 			"Expected {} different generated card_sets with {} cards, got {}", EXPECTED_HAND_COUNT[7], 7, hand_count);
 
+		let mut success = true;
 		for i in 0..eval_type_count.len() {
-			let (s, c) = EXPECTED_COUNTS[i];
-			assert_eq!(c, eval_type_count[i], 
-				"Expected {} occurences of '{}', got {}", c, s, eval_type_count[i]);
+			let (_s, c) = EXPECTED_COUNTS[i];
+			if c != eval_type_count[i] {
+				success = false;
+				break;
+			}
+		}
+
+		if !success {
+			let mut err_string = format!("\n \t{:15} {:8}    {:8}\n", "Hand type", "Expected", "Got");
+			for i in 0..eval_type_count.len() {
+				let (s, c) = EXPECTED_COUNTS[i];
+				if c == eval_type_count[i] {
+					err_string.push_str(&format!(" \t{:15}: {:8} == {:8}\n", s, c, eval_type_count[i]));
+				} else {
+					err_string.push_str(&format!(">\t{:15}: {:8} != {:8}\n", s, c, eval_type_count[i]));
+				}
+			}
+			panic!("{}", err_string);
 		}
 	}
 
@@ -82,21 +99,31 @@ mod tests {
 		};
 		let reader = BufReader::new(file);
 	
+		let mut last_comment = "???".to_owned();
 		let mut prev_str = "None".to_owned();
 		let mut prev_eval = 1;
 		for (i, line) in reader.lines().enumerate() {
             let curr_str = line.unwrap();
-			if curr_str.len() == 0 || curr_str.chars().nth(0).unwrap() == '#' {
+			if curr_str.len() == 0 {
 				continue;
 			}
-			let cards: CardSet = curr_str.as_str().into();
+			if curr_str.chars().nth(0).unwrap() == '#' {
+				last_comment = (&curr_str[2..]).to_owned();
+				continue;
+			}
+			let cards: CardSet = (&curr_str[2..]).into();
 			let canonical_cards = cards.as_canonical();
 			let curr_eval = canonical_cards.evaluate();
 			if prev_str != "None" {
+				let success = match curr_str.chars().nth(0).unwrap() {
+					'>' => prev_eval > curr_eval,
+					'=' => prev_eval == curr_eval,
+					_ => panic!("Invalid eval order test file"),
+				};
 				assert!(
-					prev_eval >= curr_eval,
-					"\n\t<Line {}> Expected different order\n\t\tPrevious: '{}' -> Eval={}\n\t\tCurrent : '{}' -> Eval={}\n",
-					i, prev_str, prev_eval, curr_str, curr_eval
+					success,
+					"\n\t<Line={}, Section='{}'> Expected different order\n\t\tPrevious: '{}' -> Eval={}\n\t\tCurrent : '{}' -> Eval={}\n",
+					i+1, last_comment, prev_str, prev_eval, curr_str, curr_eval
 				);
 			}
 			prev_eval = curr_eval;

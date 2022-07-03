@@ -1,29 +1,10 @@
-use std::{fmt::{self, Write}};
+use std::fmt::{self, Write};
 use std::slice::{Iter, IterMut};
 
 use itertools::Itertools;
 
-// Card
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Card(pub u8);
+use super::card::Card;
 
-impl fmt::Display for Card {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-		const NRS: &str = "23456789TJQKA";
-        const SUITS: &str = "cdhs";
-	
-        fmt.write_char(NRS.chars().nth((self.0 % 13) as usize).unwrap())?;
-        fmt.write_char(SUITS.chars().nth((self.0 / 13) as usize).unwrap())?;
-
-        Ok(())
-    }
-}
-
-impl From<u8> for Card {
-    fn from(c: u8) -> Self {
-        Card(c)
-    }
-}
 
 // CardSet
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -44,47 +25,46 @@ impl fmt::Display for CardSet {
     }
 }
 
-impl From<Vec<u8>> for CardSet {
-    fn from(c: Vec<u8>) -> Self {
-        let vec = c.iter().map(|&x| x.into()).collect::<Vec<Card>>();
-        
-        CardSet::from_vec(vec)
+impl From<Vec<Card>> for CardSet {
+    fn from(cards: Vec<Card>) -> Self {
+        CardSet::new(cards.as_slice())
     }
 }
 
-impl Into<CardSet> for &str {
-	fn into(self) -> CardSet {
+impl From<Vec<u8>> for CardSet {
+    fn from(c: Vec<u8>) -> Self {
+        let vec = c.iter().map(|&x| x.into()).collect::<Vec<Card>>();
+        vec.into()
+    }
+}
+
+impl From<&[u8]> for CardSet {
+    fn from(c: &[u8]) -> Self {
+        let vec = c.iter().map(|&x| x.into()).collect::<Vec<Card>>();
+        vec.into()
+    }
+}
+
+impl From<&str> for CardSet {
+	fn from(s: &str) -> Self {
         // Supported formats:
         // "4h.2c.3c.As.9s.Qs" with '.' as any character
-		const NRS: &str = "23456789TJQKA";
-        const SUITS: &str = "cdhs";
-
 		let mut cards = Vec::new();
-
-		for i in 0..(self.chars().count()+1)/3 {
-            let suit_char = self.chars().nth(3*i+1).unwrap();
-            let nr_char = self.chars().nth(3*i).unwrap();
-            let suit = SUITS.chars().position(|c| c == suit_char).unwrap();
-            let nr = NRS.chars().position(|c| c == nr_char).unwrap();
-			cards.push(Card((suit * 13 + nr) as u8));
+		for i in 0..(s.chars().count()+1)/3 {
+            cards.push(Card::from(&s[i*3..(i*3+2)]));
 		}
-
-		CardSet::from_vec(cards)
+        cards.into()
 	}
 }
 
 impl FromIterator<Card> for CardSet {
     fn from_iter<I: IntoIterator<Item = Card>>(iter: I) -> Self {
         let vec = iter.into_iter().collect::<Vec<Card>>();
-        Self::from_vec(vec)
+        vec.into()
     }
 }
 
 impl CardSet {
-    pub fn from_vec(cards: Vec<Card>) -> Self {
-        Self::new(cards.as_slice())
-    }
-
     pub fn new(cards: &[Card]) -> Self {
         let mut cs = CardSet {
             cards: [255.into(); 7],

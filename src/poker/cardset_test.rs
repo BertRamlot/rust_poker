@@ -1,9 +1,9 @@
 
 #[cfg(test)]
-mod tests {
+mod cardset_test {
     use std::{collections::HashSet, fs::File, io::{BufReader, BufRead}, path::Path};
 
-    use crate::poker::convertor::{CardSet};
+    use crate::poker::cardset::{CardSet};
 
 	const EXPECTED_HAND_COUNT: [u64; 8] = [0, 52, 1326, 22100, 270725, 2598960, 20358520, 133784560];
 

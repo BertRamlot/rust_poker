@@ -11,3 +11,4 @@ opt-level = 3
 
 [dependencies]
 itertools = "0.8"
+rand = "0.8.5"

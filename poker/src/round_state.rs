@@ -9,7 +9,9 @@ Other rounds: player to the left of the dealer begins.
 Min bet amount: max(big blind, highest raise seen this round).
 
 <--- 2-player game --->
-The normal rules for positioning the blinds do not apply when there are only two players at the table. The player on the button is always due the small blind, and the other player must pay the big blind. The player on the button is therefore the first to act before the flop, but last to act for all remaining betting rounds.
+The normal rules for positioning the blinds do not apply when there are only two players at the table.
+The player on the button is always due the small blind, and the other player must pay the big blind.
+The player on the button is therefore the first to act before the flop, but last to act for all remaining betting rounds.
 
 <--- SPLITS --->
 https://www.rookieroad.com/poker/how-do-you-split-the-pot-in-a-poker-game/

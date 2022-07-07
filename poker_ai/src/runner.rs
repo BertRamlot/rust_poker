@@ -1,18 +1,16 @@
-extern crate poker;
-use poker::round_state::RoundState;
-
 use colored::{Colorize, ColoredString};
 use rand::{prelude::SliceRandom, thread_rng};
 use std::time::{Duration, Instant};
 
+use poker::round_state::RoundState;
 
-trait ActionSupplier {
+
+pub trait ActionSupplier {
     fn get_action(&self, rs: &RoundState) -> f32;
     fn name(&self) -> &str;
 }
 
-
-struct FullTestResults<'a> {
+pub struct FullTestResults<'a> {
     players: &'a [Box<dyn ActionSupplier>],
     games_played: Vec<[u64; 16]>,
     avg_win: Vec<[f32; 16]>, // avg_win[i][j] -> avg big_blind win for [PLAYER i] playing in [POSITION j]
@@ -25,7 +23,7 @@ impl std::fmt::Display for FullTestResults<'_> {
 
         // Calculate total games played
         let total_games_played: u64 = self.games_played.iter().map(|a| a.iter().sum::<u64>()).sum::<u64>()/(self.table_size as u64);
-        write!(f, "Simulated {} games in {:.2} ({:.2} games per second)\n",
+        write!(f, "Simulated {} games in {:.2}s ({:.2} games per second)\n",
             total_games_played,
             self.elapsed.as_secs_f32(),
             (total_games_played as f32)/self.elapsed.as_secs_f32()
@@ -37,20 +35,31 @@ impl std::fmt::Display for FullTestResults<'_> {
             for j in 0..self.table_size {
                 aggregate_preformance[i] += self.avg_win[i][j];
             }
+            aggregate_preformance[i] /= self.table_size as f32;
         }
 
         // Find best and worst preformers per position
         let mut best_preformer: Vec<usize> = Vec::new();
         let mut worst_preformer: Vec<usize> = Vec::new();
-        for j in 0..self.table_size {
+        for item_index in 0..1+self.table_size {
             let mut best_index: usize = 0;
             let mut worst_index: usize = 0;
             for i in 0..self.players.len() {
-                if self.avg_win[i][j] > self.avg_win[best_index][j] {
-                    best_index = i;
-                }
-                if self.avg_win[i][j] < self.avg_win[worst_index][j] {
-                    worst_index = i;
+                if item_index == 0 {
+                    if aggregate_preformance[i] > aggregate_preformance[best_index] {
+                        best_index = i;
+                    }
+                    if aggregate_preformance[i] <= aggregate_preformance[worst_index] {
+                        worst_index = i;
+                    }
+                } else {
+                    let j: usize = item_index-1;
+                    if self.avg_win[i][j] > self.avg_win[best_index][j] {
+                        best_index = i;
+                    }
+                    if self.avg_win[i][j] <= self.avg_win[worst_index][j] {
+                        worst_index = i;
+                    }
                 }
             }
             best_preformer.push(best_index);
@@ -58,23 +67,42 @@ impl std::fmt::Display for FullTestResults<'_> {
         }
 
         // Write header
-        write!(f, "  {:^width$}", "Player", width=name_length)?;
-        write!(f, "{:^width$}", "TOTAL", width=7)?;
+        const HEADER_TITLES_2_PLAYERS: [&str; 2] = ["SB (F0)", "BB (F1)"];
+        const HEADER_TITLES_3_PLAYERS: [&str; 3] = ["BTN (F0)", "SB (F1)", "BB"];
+        const HEADER_TITLES_DEFUALT: [&str; 4] = ["BTN", "SB (F0)", "BB", "P3 (F1)"];
+        write!(f, "  {:^width$} ", "Player", width=name_length)?;
+        write!(f, "{:^width$}|", "TOTAL", width=9)?;
         for i in 0..self.table_size {
-            write!(f, " POS={:width$}", i, width=2)?;
+            let header_item: String = match self.table_size {
+                2 => HEADER_TITLES_2_PLAYERS[i].to_string(),
+                3 => HEADER_TITLES_3_PLAYERS[i].to_string(),
+                _ => {
+                    if i < HEADER_TITLES_DEFUALT.len() {
+                        HEADER_TITLES_DEFUALT[i].to_owned()
+                    } else {
+                        format!("P{}", i)
+                    }
+                }
+            };
+
+            write!(f, " {:<width$}", header_item, width=7)?;
         }
         write!(f, "\n")?;
 
         // Write rows (per player)
         for i in 0..self.players.len() {
             write!(f, " -{} {:width$}", self.players[i].name(), "", width=name_length-self.players[i].name().len())?;
-            write!(f, "{:>+width$.prec$} ", aggregate_preformance[i], width=2, prec=3)?;
-            for j in 0..self.table_size {
-                let val = self.avg_win[i][j];
+            for item_index in 0..1+self.table_size {
+                let val: f32;
+                if item_index == 0 {
+                    val = aggregate_preformance[i];
+                } else {
+                    val = self.avg_win[i][item_index-1 as usize];    
+                }
                 let mut base_string: ColoredString = ColoredString::from(format!("{:>+width$.prec$} ", val, width=2, prec=3).as_str());
-                if i == best_preformer[j] {
+                if i == best_preformer[item_index] {
                     base_string = base_string.on_green();
-                } else if i == worst_preformer[j] {
+                } else if i == worst_preformer[item_index] {
                     base_string = base_string.on_red();
                 }
                 if f32::abs(val) < 0.002 {
@@ -84,7 +112,10 @@ impl std::fmt::Display for FullTestResults<'_> {
                 } else {
                     base_string = base_string.red();
                 }
-                write!(f, "{}", base_string)?;
+                write!(f, " {}", base_string)?;
+                if item_index == 0 {
+                    write!(f, " |")?;
+                }
             }
             write!(f, "\n")?;
         }
@@ -93,7 +124,7 @@ impl std::fmt::Display for FullTestResults<'_> {
 }
 
 
-fn full_test<'a>(players: &'a [Box<dyn ActionSupplier>], table_size: usize, games: usize) -> FullTestResults<'a> {
+pub fn benchmark_players<'a>(players: &'a [Box<dyn ActionSupplier>], table_size: usize, games: usize) -> FullTestResults<'a> {
 
     let mut accumulated_outcome: Vec<[f32; 16]> = vec![[0.0; 16]; players.len()];
     let mut game_count: Vec<[u64; 16]> = vec![[0; 16]; players.len()];
@@ -105,7 +136,7 @@ fn full_test<'a>(players: &'a [Box<dyn ActionSupplier>], table_size: usize, game
         player_order.shuffle(&mut rng);
 
         for _ in 0..100 {
-            let init_chips =vec![100.0; table_size];
+            let init_chips =vec![70.0; table_size];
             for i in 0..table_size {
                 accumulated_outcome[player_order[i]][i] -= init_chips[i];
             }

@@ -1,16 +1,13 @@
 
 #[cfg(test)]
 mod game_test {
-    use crate::poker::game::RoundState;
-
+    use poker::round_state::RoundState;
 
     #[test]
     pub fn test_game_finish() {
         let mut rs1 = RoundState {
             player_count: 8,
             stage: 3,
-            turn: 0,
-            min_raise: 1.0,
             community_cards: ["As".into(), "Ks".into(), "5h".into(), "6c".into(), "8c".into()],
             player_cards: vec![
                 "Ah".into(), "4h".into(), // 0 2nd
@@ -25,7 +22,11 @@ mod game_test {
             bet_chips:  vec![3.0, 50.0,  0.0, 10.0, 100.0, 110.0, 15.0, 130.0],
             free_chips: vec![0.0,  0.0, 25.0,   0.0,  0.0,  0.0,  10.0,  20.0],
             folded: (1 << 2) | (1 << 6),
+            ..Default::default()
         };
+        while !rs1.is_finished() {
+            rs1.do_action(0.0);
+        }
         assert!(rs1.is_finished(), "rs1 should be finished");
         rs1.finish_game();
 

@@ -1,14 +1,8 @@
-[package]
-name = "rust_poker"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+members = [
+    "poker",
+    "poker_ai",
+]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-# Runs tests optimized
 [profile.test]
 opt-level = 3
-
-[dependencies]
-itertools = "0.8"
-rand = "0.8.5"

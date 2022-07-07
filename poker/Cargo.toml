@@ -1,0 +1,27 @@
+[package]
+name = "poker"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+# Runs tests optimized
+[profile.test]
+opt-level = 3
+
+[dependencies]
+itertools = "0.8"
+rand = "0.8.5"
+criterion = "0.3.5"
+
+[features]
+html_reports = []
+
+
+[[bench]]
+name = "game_benchmark"
+harness = false
+
+[[bench]]
+name = "evaluation_benchmark"
+harness = false

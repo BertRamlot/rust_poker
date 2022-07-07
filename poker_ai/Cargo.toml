@@ -1,0 +1,10 @@
+[package]
+name = "poker_ai"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+poker = { path = "../poker" }
+
+rand = "0.8.5"
+colored = "2.0.0"

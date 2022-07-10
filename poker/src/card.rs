@@ -220,12 +220,6 @@ impl CardSet {
         self.update(out.as_slice());
     }
 
-    /*
-    pub fn evaluate(&self) -> u32 {
-        0u32
-    }
-    */
-    
     // ~ 0.24 us
     pub fn evaluate(&self) -> i32 {
         // Expects the card vector to be canonicalized

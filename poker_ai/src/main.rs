@@ -1,94 +1,91 @@
-use poker::{round_state::RoundState, card::CardSet};
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::vec;
+
 use poker_ai::runner::{ActionSupplier, benchmark_players};
+use poker_ai::cfrm::{CFRMSupplier, CFRMBackbone};
+use poker_ai::basic_ai::{AlwaysCall, AlwaysMinRaise, AlwaysFold, BasicPlayer};
 
 fn main() {
     println!("Starting test");
-    let players: Vec<Box<dyn ActionSupplier>> = vec![
+    train_and_test();
+    // standard_test();
+}
+
+#[allow(dead_code)]
+fn train_and_test<'a>() {
+    let cfrm_backbone = Rc::new(RefCell::new(Box::new(CFRMBackbone::new())));
+    let mut all_players: Vec<Box<dyn ActionSupplier + 'a>> = vec![
         Box::new(AlwaysCall{}),
         Box::new(AlwaysMinRaise{}),
         Box::new(AlwaysFold{}),
         Box::new(BasicPlayer{}),
     ];
-    for ts in 2..=4 {
-        let res = benchmark_players(&players, ts, 1 * 1000000);
-        println!("Finished test, results:\n{}", res);
-    }
-}
+    let non_cfrm_player_count = all_players.len();
+    all_players.push(Box::new(CFRMSupplier::new(cfrm_backbone.clone(), "LIVE".to_owned())));
 
-struct AlwaysCall {}
-impl ActionSupplier for AlwaysCall {
-    fn get_action(&self, _rs: &RoundState) -> f32 {
-        return 0.0;
-    }
-    fn name(&self) -> &str {
-        "AlwaysCall"
-    }
-}
+    for itt in 0..10 {
+        /*
+        {
+            let backbone = cfrm_backbone.borrow();
 
-struct AlwaysMinRaise {}
-impl ActionSupplier for AlwaysMinRaise {
-    fn get_action(&self, _rs: &RoundState) -> f32 {
-        return 1e-20;
-    }
-    fn name(&self) -> &str {
-        "AlwaysMinRaise"
-    }
-}
-
-struct AlwaysFold {}
-impl ActionSupplier for AlwaysFold {
-    fn get_action(&self, _rs: &RoundState) -> f32 {
-        return -1.0;
-    }
-    fn name(&self) -> &str {
-        "AlwaysFold"
-    }
-}
-
-struct BasicPlayer {}
-impl ActionSupplier for BasicPlayer {
-    fn get_action(&self, rs: &RoundState) -> f32 {
-        let card0 = rs.player_cards[rs.turn as usize];
-        let card1 = rs.player_cards[1 + rs.turn as usize];
-
-        let own_bet = rs.bet_chips[rs.turn as usize];
-        let max_bet = rs.bet_chips.clone().into_iter().reduce(f32::max).unwrap();
-        let pot_size = rs.bet_chips.iter().sum::<f32>();
-
-        if (rs.stage == 0) || (rs.stage == 1) || (rs.stage == 2) {
-            if card0.0 + card1.0 > 20 {
-                return pot_size*2.0 - own_bet;
-            } else if card0.0 + card1.0 > 12 {
-                return 0.0;
-            } else {
-                if max_bet > own_bet { return -1.0 } else {return 0.0}
+            let info_community_id = CardSet::from("").as_canonical().identifier();
+            let info_private_id = CardSet::from([Card::from("As"), Card::from("Ah")].as_slice()).as_canonical().identifier();
+            let info_pub_bucket = backbone.public_buckets.get(&info_community_id);
+            if info_pub_bucket.is_some() {
+                let info_priv_bucket = info_pub_bucket.unwrap().private_buckets.get(&info_private_id);
+                if info_priv_bucket.is_some() {
+                    println!("{:?}", info_priv_bucket);
+                }
             }
-        } else if rs.stage == 3 {
-            // River, 5 cards
-            let mut card_set = CardSet::new(&[
-                rs.community_cards[0],
-                rs.community_cards[1],
-                rs.community_cards[2],
-                rs.community_cards[3],
-                rs.community_cards[4],
-                card0,
-                card1
-            ]);
-            card_set.canonicalize();
-            let eval = card_set.evaluate();
-            match eval >> 20 {
-                0 => if max_bet > own_bet { return -1.0 } else {return 0.0},
-                1 => return max_bet - own_bet,
-                2 => return pot_size*2.0 - own_bet,
-                3 => return pot_size*5.0 - own_bet,
-                4 | 5 | 6 | 7 | 8 => return 1e20,
-                _ => panic!("Invalid eval: {}", eval)
-            }
+            println!("Nodes: {}", backbone.node_count);
         }
-        return -1.0;
-    }
+        */
 
-    fn name(&self) -> &str {
-        "BasicPlayer"
+        let train_players: Vec<usize> = vec![all_players.len()-2, all_players.len()-1];
+        // Train the CFRM player and add to prev_cfrm_players
+        let train_run_result = benchmark_players(
+            all_players.as_mut(),
+            train_players.as_slice(),
+            2,
+            10000000
+        );
+
+        // let itt_backbone = Rc::new(RefCell::new(Box::new((**cfrm_backbone.borrow_mut()).clone())));
+        // all_players.push(Box::new(CFRMSupplier::new(itt_backbone.clone(), format!("{}", itt).to_owned())));
+
+        // Run a test to see how good new itt is
+        let test_players_indices: Vec<usize> = (0..all_players.len()).collect();
+        let test_run_result = benchmark_players(
+            all_players.as_mut(), // all_players.as_mut(),
+            test_players_indices.as_slice(), // train_players.as_slice(),
+            2, 
+            500000
+        );
+        print!("Finished training itt {} (took {:.2}s)", itt, train_run_result.elapsed.as_secs_f32());
+        println!(" test_run_result:\n{}",  test_run_result);
+    }
+    println!("Finished training/testing");
+}
+
+#[allow(dead_code)]
+fn standard_test() {
+    let mut all_players: Vec<Box<dyn ActionSupplier>> = vec![
+        Box::new(AlwaysCall{}),
+        Box::new(AlwaysMinRaise{}),
+        Box::new(AlwaysFold{}),
+        Box::new(BasicPlayer{}),
+    ];
+    let mut player_indices: Vec<usize> = vec![];
+    (0..all_players.len()).into_iter().for_each(|i| player_indices.push(i));
+
+    for ts in 2..=4 {
+        let res = benchmark_players(
+            all_players.as_mut(),
+            player_indices.as_slice(),
+            ts,
+            1 * 1000000
+        );
+        println!("Finished test, results:\n{}", res);
     }
 }

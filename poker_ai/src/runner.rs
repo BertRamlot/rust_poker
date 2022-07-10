@@ -6,20 +6,21 @@ use poker::round_state::RoundState;
 
 
 pub trait ActionSupplier {
-    fn get_action(&self, rs: &RoundState) -> f32;
-    fn name(&self) -> &str;
+    fn get_action(&mut self, rs: &RoundState) -> f32;
+    fn inform_finish(&mut self, rs: &RoundState, self_index: usize);
+    fn name(&self) -> String;
 }
 
-pub struct FullTestResults<'a> {
-    players: &'a [Box<dyn ActionSupplier>],
+pub struct BenchmarkResult {
+    players: Vec<String>,
     games_played: Vec<[u64; 16]>,
     avg_win: Vec<[f32; 16]>, // avg_win[i][j] -> avg big_blind win for [PLAYER i] playing in [POSITION j]
     table_size: usize,
-    elapsed: Duration,
+    pub elapsed: Duration,
 }
-impl std::fmt::Display for FullTestResults<'_> {
+impl<'a> std::fmt::Display for BenchmarkResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name_length = self.players.iter().map(|p| p.name().len()).max().unwrap();
+        let name_length = self.players.iter().map(|p| p.len()).max().unwrap();
 
         // Calculate total games played
         let total_games_played: u64 = self.games_played.iter().map(|a| a.iter().sum::<u64>()).sum::<u64>()/(self.table_size as u64);
@@ -91,7 +92,7 @@ impl std::fmt::Display for FullTestResults<'_> {
 
         // Write rows (per player)
         for i in 0..self.players.len() {
-            write!(f, " -{} {:width$}", self.players[i].name(), "", width=name_length-self.players[i].name().len())?;
+            write!(f, " -{} {:width$}", self.players[i], "", width=name_length-self.players[i].len())?;
             for item_index in 0..1+self.table_size {
                 let val: f32;
                 if item_index == 0 {
@@ -124,15 +125,16 @@ impl std::fmt::Display for FullTestResults<'_> {
 }
 
 
-pub fn benchmark_players<'a>(players: &'a [Box<dyn ActionSupplier>], table_size: usize, games: usize) -> FullTestResults<'a> {
+pub fn benchmark_players<'a>(all_players: &mut [Box<dyn ActionSupplier + 'a>], active_player_indices: &[usize], table_size: usize, games: usize) -> BenchmarkResult {
+    let player_count = active_player_indices.len();
 
-    let mut accumulated_outcome: Vec<[f32; 16]> = vec![[0.0; 16]; players.len()];
-    let mut game_count: Vec<[u64; 16]> = vec![[0; 16]; players.len()];
+    let mut accumulated_outcome: Vec<[f32; 16]> = vec![[0.0; 16]; player_count];
+    let mut game_count: Vec<[u64; 16]> = vec![[0; 16]; player_count];
 
     let start = Instant::now();
     let mut rng = thread_rng();
     for _ in 0..games/100 {
-        let mut player_order: Vec<usize> = (0..players.len()).collect();
+        let mut player_order: Vec<usize> = (0..player_count).collect();
         player_order.shuffle(&mut rng);
 
         for _ in 0..100 {
@@ -141,7 +143,19 @@ pub fn benchmark_players<'a>(players: &'a [Box<dyn ActionSupplier>], table_size:
                 accumulated_outcome[player_order[i]][i] -= init_chips[i];
             }
             let mut rs = RoundState::new(init_chips);
-            sim_round(&mut rs, players, &player_order);
+            // --- Simulate a round ---
+            while !rs.is_finished() {
+                let current_player_index = active_player_indices[player_order[rs.turn as usize]];
+                let action_supplier = all_players[current_player_index].as_mut();
+                let bet_size = action_supplier.get_action(&mut rs);
+                rs.do_action(bet_size);
+            }
+            rs.finish_game();
+        
+            for i in 0..table_size {
+                all_players[active_player_indices[player_order[i]]].inform_finish(&mut rs, i);
+            }
+            // --- End Simulate a round ---
             for i in 0..table_size {
                 accumulated_outcome[player_order[i]][i] += rs.free_chips[i];
                 game_count[player_order[i]][i] += 1;
@@ -156,20 +170,18 @@ pub fn benchmark_players<'a>(players: &'a [Box<dyn ActionSupplier>], table_size:
         }
     }
 
-    FullTestResults {
-        players: players,
+    let player_names: Vec<String> = active_player_indices.iter().map(|i| all_players[*i].name().to_owned()).collect();
+    BenchmarkResult {
+        players: player_names,
         avg_win: accumulated_outcome,
         games_played: game_count,
-        table_size: table_size,
+        table_size,
         elapsed: duration,
     }
 }
 
-fn sim_round(rs: &mut RoundState, players: &[Box<dyn ActionSupplier>], player_order: &[usize]) {
-    while !rs.is_finished() {
-        let action_supplier = players[player_order[rs.turn as usize]].as_ref();
-        let bet_size = action_supplier.get_action(rs);
-        rs.do_action(bet_size);
-    }
-    rs.finish_game();
+/*
+fn sim_round<'a>(rs: &mut RoundState, players: &'a [Box<&'a mut dyn ActionSupplier<'a>>], player_order: &[usize]) {
+
 }
+*/

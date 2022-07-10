@@ -31,6 +31,7 @@ pub struct RoundState {
     pub community_cards: [Card; 5],
     pub player_cards: Vec<Card>,
     pub bet_chips: Vec<f32>,
+    pub start_chips: Vec<f32>,
     pub free_chips: Vec<f32>,
 
     pub stage: u8, // 0: pre-flop, 1: flop, 2: turn, 3: river
@@ -43,17 +44,9 @@ pub struct RoundState {
 
 impl fmt::Display for RoundState {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let revealed_cards = match self.stage {
-            0 => 0,
-            1 => 3,
-            2 => 4,
-            3 => 5,
-            4 => 5,
-            _ => panic!("Invalid stage"),
-        };
         fmt.write_fmt(format_args!(
             "RoundState(\n  community_cards: '{}', stage: {}, min_raise: {})",
-            CardSet::from(&self.community_cards[0..revealed_cards]),
+            CardSet::from(self.get_revealed_community_cards()),
             self.stage,
             self.min_raise,
         ))?;
@@ -82,6 +75,7 @@ impl Default for RoundState {
             community_cards: [255.into(), 255.into(), 255.into(), 255.into(), 255.into()],
             player_cards: vec![],
             bet_chips: vec![],
+            start_chips: vec![],
             free_chips: vec![],
             
             stage: 0,
@@ -125,7 +119,8 @@ impl RoundState {
             community_cards: [deck[0].into(), deck[1].into(), deck[2].into(), deck[3].into(), deck[4].into()],
             player_cards: deck[5..(5+player_count*2) as usize].iter().map(|&x| x.into()).collect::<Vec<Card>>(),
             bet_chips: vec![0.0; player_count],
-            free_chips: free_chips,
+            start_chips: free_chips.clone(),
+            free_chips,
             button: button as u8,
             turn: turn as u8,
             ..Default::default()
@@ -139,6 +134,16 @@ impl RoundState {
         rs.free_chips[big_blind_index] -= big_blind_amount;
 
         rs
+    }
+
+    pub fn get_revealed_community_cards(&self) -> &[Card] {
+        match self.stage {
+            0 => &self.community_cards[0..0],
+            1 => &self.community_cards[0..3],
+            2 => &self.community_cards[0..4],
+            3|4 => &self.community_cards[0..5],
+            _ => panic!("Invalid stage"),
+        }
     }
 
     pub fn do_action(&mut self, bet_size: f32) {

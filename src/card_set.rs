@@ -71,16 +71,14 @@ impl CardSet {
             cards: [255.into(); 7],
             size: cards.len()
         };
-        cs.update(cards);
+        cs.update_part(cards, 0);
         cs
     }
 
-    fn update(&mut self, cards: &[Card]) {
+    pub fn update_part(&mut self, cards: &[Card], offset: usize) {
+        self.size = self.size.max(cards.len() + offset);
         for i in 0..cards.len() {
-            self.cards[i] = cards[i];
-        }
-        for i in cards.len()..7 {
-            self.cards[i] = Card(255u8);
+            self.cards[offset+i] = cards[i];
         }
     }
 
@@ -136,11 +134,11 @@ impl CardSet {
 
         // Apply suit mapping and sort
         let mut out = ranks.iter().zip(suits.iter())
-            .map(|(&rank, &suit)| Card(suit_mapping[suit as usize]*13 + rank))
+            .map(|(&rank, &suit)| Card(13 * suit_mapping[suit as usize] + rank))
             .collect::<Vec<Card>>();
         out.sort_by_key(|&x| 255u8 - x.0);
 
-        self.update(&out);
+        self.update_part(&out, 0);
     }
 
     // ~ 0.25 us

@@ -6,16 +6,6 @@ pub struct Card(
     pub u8
 );
 
-impl Card {
-    pub fn rank(&self) -> u8 {
-        self.0 % 13
-    }
-
-    pub fn suit(&self) -> u8 {
-        self.0 / 13
-    }
-}
-
 const RANK_CHARS: &str = "23456789TJQKA";
 const SUIT_CHARS: &str = "cdhs";
 
@@ -53,5 +43,15 @@ impl From<&str> for Card {
             (Some(rank), Some(suit)) => Card::from((suit * 13 + rank) as u8),
             _ => panic!("Invalid input: Invalid card representation"),
         }
+    }
+}
+
+impl Card {
+    pub fn rank(&self) -> u8 {
+        self.0 % 13
+    }
+
+    pub fn suit(&self) -> u8 {
+        self.0 / 13
     }
 }

@@ -1,23 +1,22 @@
-/*
-See: https://en.wikipedia.org/wiki/Betting_in_poker
 
-<--- ORDER --->
-First round : player to the left of the blinds begins.
-Other rounds: player to the left of the dealer begins.
+// See: https://en.wikipedia.org/wiki/Betting_in_poker
+//
+// --- ORDER ---
+// First round : player to the left of the blinds begins.
+// Other rounds: player to the left of the dealer begins.
+//
+// --- BET SIZE ---
+// Min bet amount: max(big blind, highest raise seen this round).
+//
+// --- 2-player game ---
+// The normal rules for positioning the blinds do not apply when there are only two players at the table.
+// The player on the button is always due the small blind, and the other player must pay the big blind.
+// The player on the button is therefore the first to act before the flop, but last to act for all remaining betting rounds.
+//
+// --- SPLITS ---
+// https://www.rookieroad.com/poker/how-do-you-split-the-pot-in-a-poker-game/
 
-<--- BET SIZE --->
-Min bet amount: max(big blind, highest raise seen this round).
-
-<--- 2-player game --->
-The normal rules for positioning the blinds do not apply when there are only two players at the table.
-The player on the button is always due the small blind, and the other player must pay the big blind.
-The player on the button is therefore the first to act before the flop, but last to act for all remaining betting rounds.
-
-<--- SPLITS --->
-https://www.rookieroad.com/poker/how-do-you-split-the-pot-in-a-poker-game/
-
-*/
-
+use core::panic;
 use std::vec;
 use std::fmt;
 use std::cmp::Ordering::Equal;
@@ -25,45 +24,69 @@ use std::cmp::Ordering::Equal;
 use rand::prelude::*;
 use crate::{card::Card, card_set::CardSet};
 
+#[derive(Debug, PartialEq)]
+pub enum RoundStage {
+    PreFlop,
+    Flop,
+    Turn,
+    River,
+    Finished
+}
+
+impl RoundStage {
+    fn next(&self) -> RoundStage {
+        match self {
+            RoundStage::PreFlop => RoundStage::Flop,
+            RoundStage::Flop => RoundStage::Turn,
+            RoundStage::Turn => RoundStage::River,
+            RoundStage::River => RoundStage::Finished,
+            RoundStage::Finished => panic!("No stage after finished!") // TODO: change this to just be idempotent?
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct RoundState {
+    pub community_cards: CardSet,
+    pub button: u8,
+    pub folded: u16, // Bitmask of players who have folded.
+    pub stage: RoundStage,
+    pub min_raise: f32,
+    pub last_raise_by: u8,
+    pub turn: u8,
+
+    // Player count dependent
     pub player_count: usize,
-    pub community_cards: [Card; 5],
-    pub player_cards: Vec<Card>,
+    pub player_cards: Vec<CardSet>,
     pub bet_chips: Vec<f32>,
     pub start_chips: Vec<f32>,
     pub free_chips: Vec<f32>,
-
-    pub stage: u8, // 0: pre-flop, 1: flop, 2: turn, 3: river
-    pub turn: u8,
-    pub button: u8,
-    pub min_raise: f32,
-    pub folded: u16, // Bitmask of players who have folded.
-    pub last_raise_by: u8,
 }
 
 impl fmt::Display for RoundState {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.write_fmt(format_args!(
-            "RoundState(\n  community_cards: '{}', stage: {}, min_raise: {})",
-            CardSet::from(self.get_revealed_community_cards()),
+        write!(
+            fmt,
+            "RoundState(\n  community_cards: '{}', stage: {:?}, min_raise: {}",
+            CardSet::from(self.revealed_community_cards()),
             self.stage,
             self.min_raise,
-        ))?;
+        )?;
         for i in 0..self.player_count {
-            fmt.write_fmt(format_args!(
+            write!(
+                fmt,
                 "\n    [Player {}, '{}', {:5.3}/{:5.3}] [{}|{}|{}|{}]",
                 i,
-                CardSet::from(&self.player_cards[i..i+2]),
+                self.player_cards[i],
                 self.bet_chips[i],
                 self.free_chips[i],
                 if self.folded & (1 << i) == 1 {"FO"} else {"  "},
                 if i as u8 == self.button {"BU"} else {"  "},
                 if i as u8 == self.turn {"TU"} else {"  "},
                 if i as u8 == self.last_raise_by {"LR"} else {"  "},
-            ))?;
+            )?;
         }
-        fmt.write_str("\n)")?;
+        write!(fmt, "\n)")?;
         Ok(())
     }
 }
@@ -72,13 +95,13 @@ impl Default for RoundState {
     fn default() -> RoundState {
         RoundState {
             player_count: 0,
-            community_cards: [255.into(), 255.into(), 255.into(), 255.into(), 255.into()],
+            community_cards: "".into(),
             player_cards: vec![],
             bet_chips: vec![],
             start_chips: vec![],
             free_chips: vec![],
             
-            stage: 0,
+            stage: RoundStage::PreFlop,
             turn: 0,
             button: 0,
             min_raise: 1.0,
@@ -90,12 +113,19 @@ impl Default for RoundState {
 
 impl RoundState {
     pub fn new(free_chips: Vec<f32>) -> Self {
+        let player_count = free_chips.len();
+        if player_count < 2 {
+            panic!("Need atleast 2 players to define a RoundState");
+        }
+        if player_count > 16 {
+            panic!("RoundState has no support for more than 16 players");
+        }
+
         let mut rng = thread_rng();
         let mut deck: Vec<u8> = (0..52).collect();
         deck.shuffle(&mut rng);
 
-        let button = 0;
-        let player_count = free_chips.len();
+        let button: usize = 0;
         let small_blind_index;
         let big_blind_index;
         let turn;
@@ -114,18 +144,18 @@ impl RoundState {
 
         let mut rs = RoundState {
             player_count,
-            community_cards: [deck[0].into(), deck[1].into(), deck[2].into(), deck[3].into(), deck[4].into()],
-            player_cards: deck[5..(5+player_count*2) as usize].iter().map(|&x| x.into()).collect::<Vec<Card>>(),
+            community_cards: deck[0..5].into(),
+            player_cards: (0..player_count).into_iter().map(|i| deck[5+2*i..7+2*i].into()).collect(),
             bet_chips: vec![0.0; player_count],
             start_chips: free_chips.clone(),
-            free_chips,
+            free_chips: free_chips,
             button: button as u8,
             turn: turn as u8,
             ..Default::default()
         };
         
         let small_blind_amount = f32::min(0.5, rs.free_chips[small_blind_index]);
-        let big_blind_amount = f32::min(1.0, rs.free_chips[big_blind_index]);
+        let big_blind_amount: f32 = f32::min(1.0, rs.free_chips[big_blind_index]);
         rs.bet_chips[small_blind_index] = small_blind_amount;
         rs.free_chips[small_blind_index] -= small_blind_amount;
         rs.bet_chips[big_blind_index] = big_blind_amount;
@@ -134,16 +164,18 @@ impl RoundState {
         rs
     }
 
-    pub fn get_revealed_community_cards(&self) -> &[Card] {
+    pub fn revealed_community_cards(&self) -> &[Card] {
         match self.stage {
-            0 => &self.community_cards[0..0],
-            1 => &self.community_cards[0..3],
-            2 => &self.community_cards[0..4],
-            3|4 => &self.community_cards[0..5],
-            _ => panic!("Invalid stage"),
+            RoundStage::PreFlop => &self.community_cards.cards[0..0],
+            RoundStage::Flop => &self.community_cards.cards[0..3],
+            RoundStage::Turn => &self.community_cards.cards[0..4],
+            RoundStage::River | RoundStage::Finished => &self.community_cards.cards[0..5]
         }
     }
 
+    //              Fold:                 bet_size <  0.0
+    // Check/Check-raise:          0.0 <= bet_size <= check_amount
+    //     Raise, All-in: check_amount <  bet_size
     pub fn do_action(&mut self, bet_size: f32) {
         if bet_size < 0.0 {
             // Fold
@@ -180,10 +212,12 @@ impl RoundState {
             self.turn = (self.turn + 1) % (self.player_count as u8);
             if self.turn == self.last_raise_by {
                 // Went full circle without anyone raising, go to next stage.
-                self.stage += 1;
+                self.stage = self.stage.next();
                 self.turn = (self.button + 1) % (self.player_count as u8);
                 self.last_raise_by = self.turn;
-                break;
+                if self.is_finished() {
+                    break;
+                }
             }
             if (self.folded & (1 << self.turn)) == 0 && self.free_chips[self.turn as usize] > 0.0 {
                 // Found next player who can act
@@ -193,34 +227,18 @@ impl RoundState {
     }
 
     pub fn is_finished(&self) -> bool {
-        return self.stage == 4;
-        /*
-        if self.stage >= 4 {
-            return true;
-        }
-        let mut actable_players = 0;
-        for i in 0..self.player_count {
-            if (self.folded & (1 << i) == 0) && (self.free_chips[i] > 0.0) {
-                actable_players += 1;
-                if actable_players == 2 {
-                    return false;
-                }
-            }
-        }
-        return true;
-         */
+        return self.stage == RoundStage::Finished;
     }
 
     pub fn finish_game(&mut self) {
-        let mut cards: [Card; 7] = [self.community_cards[0], self.community_cards[1], self.community_cards[2], self.community_cards[3], self.community_cards[4], 255.into(), 255.into()];
+        let mut card_set = self.community_cards.clone();
+        
         let mut winner_order: Vec<(u8, f32, i32)> = Vec::new();
         for i in 0..self.player_count {
             if self.folded & (1 << i) == 1 {
                 continue;
             }
-            cards[5] = self.player_cards[i*2];
-            cards[6] = self.player_cards[i*2+1];
-            let mut card_set = CardSet::new(&cards);
+            card_set.update_part(&self.player_cards[i].cards[0..2], 5);
             card_set.canonicalize();
             winner_order.push((i as u8, self.bet_chips[i], card_set.evaluate()));
         }

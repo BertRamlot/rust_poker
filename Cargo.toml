@@ -1,8 +1,20 @@
-[workspace]
-members = [
-    "poker",
-    "poker_ai",
-]
+[package]
+name = "poker"
+version = "0.1.0"
+edition = "2021"
 
+# Runs tests optimized
 [profile.test]
 opt-level = 3
+
+[dependencies]
+rand = "0.8.5"
+criterion = "0.5.1"
+
+[[bench]]
+name = "game_benchmark"
+harness = false
+
+[[bench]]
+name = "evaluation_benchmark"
+harness = false

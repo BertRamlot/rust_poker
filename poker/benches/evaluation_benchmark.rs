@@ -1,6 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
-use poker::card::CardSet;
+use poker::card_set::CardSet;
 use rand::{prelude::SliceRandom, thread_rng};
 
 

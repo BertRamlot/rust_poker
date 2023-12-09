@@ -23,7 +23,7 @@ use std::fmt;
 use std::cmp::Ordering::Equal;
 
 use rand::prelude::*;
-use crate::card::{Card, CardSet};
+use crate::{card::Card, card_set::CardSet};
 
 #[derive(Debug)]
 pub struct RoundState {
@@ -100,11 +100,9 @@ impl RoundState {
         let big_blind_index;
         let turn;
         if player_count == 2 {
-            /*
-            The normal rules for positioning the blinds do not apply when there are only two players at the table.
-            The player on the button is always due the small blind, and the other player must pay the big blind.
-            The player on the button is therefore the first to act before the flop, but last to act for all remaining betting rounds.
-            */
+            // The normal rules for positioning the blinds do not apply when there are only two players at the table.
+            // The player on the button is always due the small blind, and the other player must pay the big blind.
+            // The player on the button is therefore the first to act before the flop, but last to act for all remaining betting rounds.
             small_blind_index = button;
             big_blind_index = (button + 1) % player_count;
             turn = small_blind_index;

@@ -4,7 +4,9 @@
 = Th Jh Qh Kh Ah 6s 8d
 
 # Straight Flush
-> Qh Kh Jh Th 9h Ks Kc
+> Kh Qh Jh Th 9h Ks Kc
+> Qh Jh Th 9h 8h Ks Kc
+= Qh Jh Th 9h 8h Ah Kc
 > 7s 8s 9s Ts Js As Ac
 = 7s 8s 9s Ts Js 6s 3h
 = 7s 8s 9s Ts Js 2c 2h
@@ -23,6 +25,7 @@
 > Ac Ad As Ah 2d 2s 2c
 
 > 5c 5d 5s 5h Ad 7s 6h
+= 5c 5d 5s 5h 4c 3c Ad
 > 5c 5d 5s 5h 2d Kd Jd
 = 5c 5d 5s 5h Ks 3c 3h
 > 5c 5d 5s 5h 3d 4s 6c
@@ -35,6 +38,7 @@
 > As Ah Ac Ks Kh 3s 4d
 = As Ah Ac Ks Kh 9s 5d
 > As Ah Ac 2s 2h 5d 5c
+> 9s 9h 9c Js Jd Jc 7d
 > 9s 9h 9c Js Jd 7c 7d
 > 9s 9h 9c 5s 5h 4s 2d
 > 2s 2h 2c 7s 7d Kh Qd
@@ -44,7 +48,7 @@
 > As Ks Qs Js 9s 8h 3c
 > 4s 7s 8s 9s Qs Kh 8c
 > 6s 8s 9s Ts Js 3s 5d
-> 2s 3s 4s 5s 7s 2h 2d
+> 3s 4s 5s 6s 8s 9s 2d
 
 # Straight
 > As Kc Qh Js Th 5h 3s

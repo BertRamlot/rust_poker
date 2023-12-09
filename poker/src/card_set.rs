@@ -1,24 +1,18 @@
-use std::fmt::{self, Write};
+use std::fmt::{self};
 use std::slice::{Iter, IterMut};
-use itertools::Itertools;
 use crate::card::Card;
 
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CardSet {
-    cards: [Card; 7],
-    size: u8
+    pub cards: [Card; 7],
+    size: usize
 }
 
 impl fmt::Display for CardSet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for (i, card) in self.iter().enumerate() {
-            write!(f, "{}", card)?;
-            if i != self.len()-1 {
-                f.write_char(' ')?;
-            }
-        }
-        Ok(())
+        let cards_as_strings: Vec<String> = self.iter().map(|card| format!("{}", card)).collect();
+        write!(f, "{}", cards_as_strings.join(" "))
     }
 }
 
@@ -51,7 +45,7 @@ impl From<&[u8]> for CardSet {
 
 impl From<&str> for CardSet {
 	fn from(s: &str) -> Self {
-        // Supported format example:
+        // Format example:
         // "4h*2c*3c*As*9s*Qs" where '*' is any character (wildcard)
 		let mut cards = Vec::new();
 		for i in 0..(s.chars().count()+1)/3 {
@@ -70,21 +64,28 @@ impl FromIterator<Card> for CardSet {
 
 impl CardSet {
     pub fn new(cards: &[Card]) -> Self {
+        if cards.len() > 7 {
+            panic!("Too many cards provided. Must be less than 7 cards.")
+        }
         let mut cs = CardSet {
             cards: [255.into(); 7],
-            size: std::cmp::min(cards.len() as u8, 7)
+            size: cards.len()
         };
         cs.update(cards);
         cs
     }
 
     fn update(&mut self, cards: &[Card]) {
-        let length = cards.len().min(self.cards.len());
-        self.cards[0..length].copy_from_slice(&cards[0..length]);
+        for i in 0..cards.len() {
+            self.cards[i] = cards[i];
+        }
+        for i in cards.len()..7 {
+            self.cards[i] = Card(255u8);
+        }
     }
 
     pub fn len(&self) -> usize {
-        self.size as usize
+        self.size
     }
 
     pub fn iter(&self) -> Iter<'_, Card> {
@@ -94,27 +95,6 @@ impl CardSet {
     pub fn iter_mut(&mut self) -> IterMut<'_, Card> {
         self.cards[..self.size as usize].iter_mut()
     }
-
-    pub fn increment(&mut self) -> bool {
-        let card_count = self.len();
-        self.cards[card_count-1].0 += 1;
-        for i in (0..card_count).rev() {
-            if self.cards[i].0 as usize >= 52-(card_count-1-i) {
-                if i == 0 {
-                    // Max value was exceeded, failed to increment
-                    return false;
-                }
-                self.cards[i-1].0 += 1;
-                continue;
-            }
-            // Found a value who's max is not exceeded
-            for j in i+1..card_count {
-                self.cards[j].0 = self.cards[i].0 + (j - i) as u8;
-            }
-            break;            
-        }
-		return true;
-	}
 
     // Uses only 6*7 = 42 bits of the 64
     pub fn identifier(&self) -> u64 {
@@ -146,21 +126,19 @@ impl CardSet {
         for (&rank, &suit) in ranks.iter().zip(suits.iter()) {
             equal_suit_count_ranking[suit as usize] *= PRIMES[rank as usize];
         }
-        let inv_suit_mapping: Vec<usize> = (0..4)
-            .into_iter()
-            .sorted_by_key(|&i| (suit_count[i], equal_suit_count_ranking[i]))
-            .collect::<Vec<usize>>();
+        let mut inv_suit_mapping: Vec<usize> = (0..4).collect();
+        inv_suit_mapping.sort_by_key(|&i| (suit_count[i], equal_suit_count_ranking[i]));
+
         let mut suit_mapping: [u8; 4] = [0; 4];
         for (i, &inv_suit_map) in inv_suit_mapping.iter().enumerate() {
             suit_mapping[inv_suit_map] = i as u8;
         }
 
         // Apply suit mapping and sort
-        let out = ranks.iter().zip(suits.iter())
-            .map(|(&rank, &suit)| suit_mapping[suit as usize]*13 + rank)
-            .sorted_by_key(|&x| 255u8 - x)
-            .map(Card)
+        let mut out = ranks.iter().zip(suits.iter())
+            .map(|(&rank, &suit)| Card(suit_mapping[suit as usize]*13 + rank))
             .collect::<Vec<Card>>();
+        out.sort_by_key(|&x| 255u8 - x.0);
 
         self.update(&out);
     }
@@ -192,6 +170,9 @@ impl CardSet {
         //   return PAIR
         // else:
         //   return HIGH_CARD
+
+        // TODO: Check if len 7
+        // TODO: check if canonicalized
 
         const HIGH_CARD_START : i32      = 0 * (1 << 20) + 1;
         const PAIR_START : i32           = 1 * (1 << 20);
@@ -249,7 +230,7 @@ impl CardSet {
             if ranks[i-1] == ranks[i] {
                 kind_count += 1;
                 if i != ranks.len()-1 {
-                    // Continue until we are at the end or the repeating pattern stops
+                    // continue until we are at the end or the repeating pattern stops
                     continue;
                 }
             }
@@ -326,14 +307,14 @@ impl CardSet {
                 let mut kicker: i32 = -1;
                 let mut i = 0;
                 while i < 5 {
-                    if ranks[i] == two_kind_h as u8 || ranks[i] == two_kind_l as u8 {
+                    if ranks[i] == two_kind_h || ranks[i] == two_kind_l {
                         i += 2; // Go faster
                         continue;
                     }
                     kicker = ranks[i] as i32;
                     break;
                 }
-                return TWO_PAIR_START + 156 * (two_kind_h as i32 -1) + 13 * (two_kind_l as i32) + kicker;
+                return TWO_PAIR_START + 156 * ((two_kind_h as i32) - 1) + 13 * (two_kind_l as i32) + kicker;
             } else {
                 // Pair
                 let mut kicker_0: i32 = -1;

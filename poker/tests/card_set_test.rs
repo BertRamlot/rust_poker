@@ -5,6 +5,27 @@ mod cardset_test {
 
     use poker::card_set::CardSet;
 
+	fn increment_cardset(card_set: &mut CardSet) -> bool {
+		let card_count = card_set.len();
+        card_set.cards[card_count-1].0 += 1;
+        for i in (0..card_count).rev() {
+            if card_set.cards[i].0 as usize >= 52-(card_count-1-i) {
+                if i == 0 {
+                    // Max value was exceeded, failed to increment
+                    return false;
+                }
+                card_set.cards[i-1].0 += 1;
+                continue;
+            }
+            // Found a value who's max is not exceeded
+            for j in i+1..card_count {
+                card_set.cards[j].0 = card_set.cards[i].0 + (j - i) as u8;
+            }
+            break;            
+        }
+		return true;
+	}
+
 	const EXPECTED_HAND_COUNT: [u64; 8] = [0, 52, 1326, 22100, 270725, 2598960, 20358520, 133784560];
 	const EXPECTED_ISOMORPHIC_HAND_COUNT: [u32; 8] = [0, 13, 169, 1755, 16432, 134459, 962988, 6009159];
 
@@ -25,7 +46,7 @@ mod cardset_test {
                 let cannonical = cards.clone().as_canonical();
                 seen_canonicals.insert(cannonical.identifier());
 				hand_count += 1;
-                if !cards.increment() {
+                if !increment_cardset(&mut cards) {
                     break;
                 }
             }
@@ -71,7 +92,7 @@ mod cardset_test {
 			let eval_type_count_index = eval_type_count.len()-1 - ((eval >> 20) as usize);
 			eval_type_count[eval_type_count_index] += 1;
 			hand_count += 1;
-			if !input.increment() {
+			if !increment_cardset(&mut input) {
 				break;
 			}
 		}

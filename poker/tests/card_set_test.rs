@@ -3,16 +3,16 @@
 mod cardset_test {
     use std::{collections::HashSet, fs::File, io::{BufReader, BufRead}, path::Path};
 
-    use poker::card::CardSet;
+    use poker::card_set::CardSet;
 
 	const EXPECTED_HAND_COUNT: [u64; 8] = [0, 52, 1326, 22100, 270725, 2598960, 20358520, 133784560];
+	const EXPECTED_ISOMORPHIC_HAND_COUNT: [u32; 8] = [0, 13, 169, 1755, 16432, 134459, 962988, 6009159];
 
 	#[test]
 	fn test_count_different_isomorphic_hands() {
-		const EXPECTED_COUNTS: [u32; 8] = [0, 13, 169, 1755, 16432, 134459, 962988, 6009159];
 
 
-        for card_count in 1..EXPECTED_COUNTS.len() {
+        for card_count in 1..EXPECTED_ISOMORPHIC_HAND_COUNT.len() {
 			let mut hand_count = 0u64;
             // println!("Starting card_count={}", card_count);
             let mut card_vec = Vec::new();
@@ -29,10 +29,22 @@ mod cardset_test {
                     break;
                 }
             }
-			assert_eq!(EXPECTED_HAND_COUNT[card_count], hand_count, 
-				"Expected {} different generated card_sets with {} cards, got {}", EXPECTED_HAND_COUNT[card_count], card_count, hand_count);
-            assert_eq!(EXPECTED_COUNTS[card_count], seen_canonicals.len() as u32,
-				"Expected {} different isomorphic card_sets with {} cards, got {}", EXPECTED_COUNTS[card_count], card_count, seen_canonicals.len());
+			assert_eq!(
+				EXPECTED_HAND_COUNT[card_count],
+				hand_count, 
+				"Expected {} different generated card_sets with {} cards, got {}",
+				EXPECTED_HAND_COUNT[card_count],
+				card_count,
+				hand_count
+			);
+            assert_eq!(
+				EXPECTED_ISOMORPHIC_HAND_COUNT[card_count],
+				seen_canonicals.len() as u32,
+				"Expected {} different isomorphic card_sets with {} cards, got {}",
+				EXPECTED_ISOMORPHIC_HAND_COUNT[card_count],
+				card_count,
+				seen_canonicals.len()
+			);
 		}
 	}
 

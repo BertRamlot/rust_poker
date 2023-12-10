@@ -16,5 +16,5 @@ name = "game_benchmark"
 harness = false
 
 [[bench]]
-name = "evaluation_benchmark"
+name = "card_set_benchmark"
 harness = false

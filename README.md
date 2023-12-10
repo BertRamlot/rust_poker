@@ -25,15 +25,15 @@ let card_set: CardSet = "As Ks 5h 6c 8c".into();
 println!("{}", card_set);
 // Outputs: As Ks 5h 6c 8c
 
-let cannonical_card_set: CardSet = card_set.as_canonical();
-println!("{}", cannonical_card_set);
+let canonical_card_set: CardSet = card_set.as_canonical();
+println!("{}", canonical_card_set);
 // Outputs: As Ks 8h 6h 5d
-// (You could also use the inplace variant: card_set.canonicalize())
+// (You could also use the in-place variant: card_set.canonicalize())
 
-let eval: i32 = cannonical_card_set.evaluate();
+let eval: i32 = canonical_card_set.evaluate();
 println!("{}", eval);
 // Outputs: 154030
-// Note: evaluate() expects a cannonical card set
+// Note: evaluate() expects a canonical card set
 ```
 
 RoundState:
@@ -56,6 +56,6 @@ while !rs.is_finished() {
 
 ## Testing
 
-- Ammount of different isomorphic hands is tested.
-- Occurence of eval types (Flush, straight, ...) is tested.
+- Amount of different isomorphic hands is tested.
+- Occurrence of eval types (Flush, straight, ...) is tested.
 - Eval order is tested for a select amount of hands (see [eval_order_test.txt](./test_resources/eval_order_test.txt))

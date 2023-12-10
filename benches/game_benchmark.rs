@@ -27,14 +27,14 @@ fn simulate_rounds(player_count: usize, init_stack: f32, bet_size: f32, itts: i3
 
 fn criterion_benchmark(c: &mut Criterion) {
     
-    c.bench_function("1k rounds (2 players)", |b| b.iter(|| simulate_rounds(
+    c.bench_function("1k rounds (2 players, ~8 actions)", |b| b.iter(|| simulate_rounds(
         black_box(2),
         black_box(100.0),
         black_box(10.0),
         black_box(1_000)
     )));
 
-    c.bench_function("1k rounds (8 players)", |b| b.iter(|| simulate_rounds(
+    c.bench_function("1k rounds (8 players, ~34 actions)", |b| b.iter(|| simulate_rounds(
         black_box(8),
         black_box(100.0),
         black_box(10.0),

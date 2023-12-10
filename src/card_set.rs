@@ -71,11 +71,11 @@ impl CardSet {
             cards: [255.into(); 7],
             size: cards.len()
         };
-        cs.update_part(cards, 0);
+        cs.set_cards_partial(cards, 0);
         cs
     }
 
-    pub fn update_part(&mut self, cards: &[Card], offset: usize) {
+    pub fn set_cards_partial(&mut self, cards: &[Card], offset: usize) {
         self.size = self.size.max(cards.len() + offset);
         for i in 0..cards.len() {
             self.cards[offset+i] = cards[i];
@@ -138,7 +138,7 @@ impl CardSet {
             .collect::<Vec<Card>>();
         out.sort_by_key(|&x| 255u8 - x.0);
 
-        self.update_part(&out, 0);
+        self.set_cards_partial(&out, 0);
     }
 
     // ~ 0.25 us

@@ -33,11 +33,8 @@ impl From<&str> for Card {
             panic!("Invalid input: String length must be 2 characters");
         }
         
-        let rank_char = s.chars().nth(0).unwrap();
-        let suit_char = s.chars().nth(1).unwrap();
-        
-        let rank = RANK_CHARS.find(rank_char);
-        let suit = SUIT_CHARS.find(suit_char);
+        let rank = RANK_CHARS.find(s.chars().nth(0).unwrap());
+        let suit = SUIT_CHARS.find(s.chars().nth(1).unwrap());
 
         match (rank, suit) {
             (Some(rank), Some(suit)) => Card::from((suit * 13 + rank) as u8),

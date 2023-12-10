@@ -7,12 +7,13 @@ Rust library for poker (Texas hold 'em), includes:
 - Full round logic
 
 ## Performance
+
 - 7 card hand canonicalization: ~ 2.5 M hands/second
 - 7 card hand evaluations: ~ 1.4M hands/second
 - 2 player game (w/ ~8 actions/game): ~ 250k games/second (= ~ 2.0M actions/second)
 - 8 player game (w/ ~34 actions/game): ~  75k games/second (= ~ 2.5M actions/second)
 
-Tested using a i7-9750H. See also the [benchmarks](./benches).
+Tested using a i7-9750H. Also, see the [benchmarks](./benches).
 
 Note: Canonicalization incurs no extra overhead when also evaluating as this is part of the evaluation process.
 

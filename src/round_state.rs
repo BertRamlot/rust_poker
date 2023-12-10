@@ -57,7 +57,7 @@ pub struct RoundState {
 
     // Player count dependent
     pub player_count: usize,
-    pub player_cards: Vec<CardSet>,
+    pub player_cards: Vec<CardSet>, // TODO: this is not ideal to use CardSet here ...
     pub bet_chips: Vec<f32>,
     pub start_chips: Vec<f32>,
     pub free_chips: Vec<f32>,
@@ -213,10 +213,12 @@ impl RoundState {
             if self.turn == self.last_raise_by {
                 // Went full circle without anyone raising, go to next stage.
                 self.stage = self.stage.next();
-                self.turn = (self.button + 1) % (self.player_count as u8);
-                self.last_raise_by = self.turn;
                 if self.is_finished() {
+                    self.finish_game();
                     break;
+                } else {
+                    self.turn = (self.button + 1) % (self.player_count as u8);
+                    self.last_raise_by = self.turn;
                 }
             }
             if (self.folded & (1 << self.turn)) == 0 && self.free_chips[self.turn as usize] > 0.0 {
@@ -230,27 +232,31 @@ impl RoundState {
         return self.stage == RoundStage::Finished;
     }
 
-    pub fn finish_game(&mut self) {
-        let mut card_set = self.community_cards.clone();
-        
-        let mut winner_order: Vec<(u8, f32, i32)> = Vec::new();
+    fn finish_game(&mut self) {       
+        let mut winner_order: Vec<(u8, f32, i32)> = Vec::new(); // (player_idx, bet_chips, hand_strength)
         for i in 0..self.player_count {
             if self.folded & (1 << i) == 1 {
                 continue;
             }
+            let mut card_set = self.community_cards.clone();
             card_set.update_part(&self.player_cards[i].cards[0..2], 5);
+            println!("{} > {}", i, card_set);
             card_set.canonicalize();
             winner_order.push((i as u8, self.bet_chips[i], card_set.evaluate()));
         }
         
-        // TODO: special case for only 1 winner? (for speed)
         // winner_order is sorted to have lowest bet size first for equal strength hands
         winner_order.sort_by(|(_, a_bet, _), (_, b_bet, _)| a_bet.partial_cmp(b_bet).unwrap_or(Equal));
         winner_order.sort_by(|&(_, _, a_val), &(_, _, b_val)| b_val.cmp(&a_val));
 
         for i in 0..winner_order.len() {
             let (fw_index, _, fw_val) = winner_order[i];
-            // Find how many winners for this pot
+            let pot_contribution: f32 = self.bet_chips[fw_index as usize];
+            if pot_contribution <= 0.0 {
+                continue;
+            }
+
+            // Find between how many winners this pot is split
             let mut pot_winners = 1;
             for j in i+1..winner_order.len() {
                 let (_, _, p_val) = winner_order[j];
@@ -262,22 +268,20 @@ impl RoundState {
 
             let mut pot = 0.0f32;
             let mut chips_left = false;
-            let pot_contribution_per = self.bet_chips[fw_index as usize];
             // fill pot
-            for n in 0..self.player_count {
-                let bet_amount = f32::min(self.bet_chips[n], pot_contribution_per);
-                self.bet_chips[n] -= bet_amount;
-                if self.bet_chips[n] != 0.0 {
+            for j in 0..self.player_count {
+                let bet_amount = f32::min(self.bet_chips[j], pot_contribution);
+                self.bet_chips[j] -= bet_amount;
+                if self.bet_chips[j] != 0.0 {
                     chips_left = true;
                 }
                 pot += bet_amount;
             }
-            // println!("Pot: {}, {}..={}, bets: {:?}", pot, i, i+pot_winners-1, self.bet_chips);
 
             // distribute pot
-            let pot_winnings_per_player = pot / (pot_winners as f32);
+            let winnings_per_winner = pot / (pot_winners as f32);
             for j in i..i+pot_winners {
-                self.free_chips[winner_order[j].0 as usize] += pot_winnings_per_player;
+                self.free_chips[winner_order[j].0 as usize] += winnings_per_winner;
             }
 
             // TODO: needed? we already select the winners pretty aggressively

@@ -240,7 +240,6 @@ impl RoundState {
             }
             let mut card_set = self.community_cards.clone();
             card_set.update_part(&self.player_cards[i].cards[0..2], 5);
-            println!("{} > {}", i, card_set);
             card_set.canonicalize();
             winner_order.push((i as u8, self.bet_chips[i], card_set.evaluate()));
         }

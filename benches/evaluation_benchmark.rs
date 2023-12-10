@@ -25,7 +25,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     }
 
     c.bench_function(
-        "rnd_cardset_eval",
+        "100k random hand evaluations",
         |b| b.iter(|| eval_cardsets(black_box(&cardsets)))
     );
 }

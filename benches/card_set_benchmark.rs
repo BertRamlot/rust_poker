@@ -5,12 +5,16 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use poker::card_set::CardSet;
 use rand::{prelude::SliceRandom, SeedableRng, rngs::StdRng};
 
+fn canonicalize_cardsets(card_sets: &mut [CardSet]) {
+    for card_set in card_sets {
+        card_set.canonicalize();
+    }
+}
 
-fn eval_cardsets(cardsets: &[CardSet]) {
-    for cardset in cardsets {
-        let mut cs = cardset.clone();
-        cs.canonicalize();
-        cs.evaluate();
+fn eval_cardsets(card_sets: &mut [CardSet]) {
+    for cardset in card_sets {
+        cardset.canonicalize();
+        cardset.evaluate();
     }
 }
 
@@ -25,8 +29,13 @@ fn criterion_benchmark(c: &mut Criterion) {
     }
 
     c.bench_function(
+        "100k random canonicalizations",
+        |b| b.iter(|| canonicalize_cardsets(black_box(&mut cardsets)))
+    );
+
+    c.bench_function(
         "100k random hand evaluations",
-        |b| b.iter(|| eval_cardsets(black_box(&cardsets)))
+        |b| b.iter(|| eval_cardsets(black_box(&mut cardsets)))
     );
 }
 
